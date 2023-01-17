@@ -76,10 +76,9 @@ class ZkMachine(models.Model):
                     conn.enable_device()
                     clear_data = zk.get_attendance()
                     if clear_data:
-                        # conn.clear_attendance()
                         self._cr.execute("""delete from zk_machine_attendance""")
+                        conn.clear_attendance()
                         conn.disconnect()
-                        raise UserError(_('Attendance Records Deleted.'))
                     else:
                         raise UserError(_('Unable to clear Attendance log. Are you sure attendance log is not empty.'))
                 else:
@@ -163,30 +162,27 @@ class ZkMachine(models.Model):
                                         if duplicate_atten_ids:
                                             continue
                                         else:
-                                            zk_attendance.create({'employee_id': get_user_id.id,
+                                            zk_attendance.create({'employee_id': get_user_id[0].id,
                                                                   'device_id': each.user_id,
                                                                   'attendance_type': str(each.status),
                                                                   'punch_type': str(each.punch),
                                                                   'punching_time': atten_time,
                                                                   'address_id': info.address_id.id})
-                                            att_var = att_obj.search([('employee_id', '=', get_user_id.id),
+                                            att_var = att_obj.search([('employee_id', '=', get_user_id[0].id),
                                                                       ('check_out', '=', False)])
-                                            print('ddfcd', str(each.status))
                                             if each.punch == 0: #check-in
                                                 if not att_var:
-                                                    att_obj.create({'employee_id': get_user_id.id,
+                                                    att_obj.create({'employee_id': get_user_id[0].id,
                                                                     'check_in': atten_time})
                                             if each.punch == 1: #check-out
                                                 if len(att_var) == 1:
                                                     att_var.write({'check_out': atten_time})
                                                 else:
-                                                    att_var1 = att_obj.search([('employee_id', '=', get_user_id.id)])
+                                                    att_var1 = att_obj.search([('employee_id', '=', get_user_id[0].id)])
                                                     if att_var1:
                                                         att_var1[-1].write({'check_out': atten_time})
 
                                     else:
-                                        print('ddfcd', str(each.status))
-                                        print('user', uid.name)
                                         employee = self.env['hr.employee'].create(
                                             {'device_id': each.user_id, 'name': uid.name})
                                         zk_attendance.create({'employee_id': employee.id,
