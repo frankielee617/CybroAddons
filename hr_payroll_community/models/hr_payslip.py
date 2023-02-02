@@ -100,7 +100,7 @@ class HrPayslip(models.Model):
         self.compute_sheet()
         expenseIds = tuple()
         for expense in self.input_line_ids:
-            expenseIds += (expense.code,)
+            expenseIds += (expense.code.split(" - ")[1],)
 
         if len(expenseIds) > 0:
             self.env.cr.execute(
@@ -515,9 +515,10 @@ class HrPayslip(models.Model):
         expenses = self.env["hr.expense"].search(
             [
                 ("employee_id", "=", self.employee_id.id),
+                ("payment_mode", "=", 'own_account'),
                 ("state", "=", "approved"),
-                ("accounting_date", ">=", self.date_from),
-                ("accounting_date", "<=", self.date_to),
+                ("write_date", ">=",datetime(self.date_from.year,self.date_from.month,self.date_from.day) + timedelta(hours=-8)),
+                ("write_date", "<", datetime(self.date_to.year,self.date_to.month,self.date_to.day) + timedelta(1) + timedelta(hours=-8)),
             ],
             order="id asc",
         )
@@ -526,7 +527,7 @@ class HrPayslip(models.Model):
         for expense in expenses:
             input_line = {
                 "name": expense.name,
-                "code": expense.id,
+                "code": f'[{expense.product_id.name}] - {expense.id}',
                 "amount": expense.total_amount_company,
             }
             input_lines += input_lines.new(input_line)
