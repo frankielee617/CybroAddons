@@ -98,6 +98,15 @@ class HrPayslip(models.Model):
     def action_payslip_done(self):
 
         self.compute_sheet()
+        expenseIds = tuple()
+        for expense in self.input_line_ids:
+            expenseIds += (expense.code.split(" - ")[1],)
+
+        if len(expenseIds) > 0:
+            self.env.cr.execute(
+                "UPDATE hr_expense SET state = %s where id in %s", ["done", expenseIds]
+            )
+
         return self.write({'state': 'done'})
 
     def action_payslip_cancel(self):
@@ -461,11 +470,9 @@ class HrPayslip(models.Model):
 
     @api.onchange('employee_id', 'date_from', 'date_to')
     def onchange_employee(self):
-
-
         if (not self.employee_id) or (not self.date_from) or (not self.date_to):
             return
-
+        self.on_get_employee_expenses()
         employee = self.employee_id
         date_from = self.date_from
         date_to = self.date_to
@@ -502,6 +509,29 @@ class HrPayslip(models.Model):
             input_lines += input_lines.new(r)
         self.input_line_ids = input_lines
         return
+
+
+    def on_get_employee_expenses(self):
+        expenses = self.env["hr.expense"].search(
+            [
+                ("employee_id", "=", self.employee_id.id),
+                ("payment_mode", "=", 'own_account'),
+                ("state", "=", "approved"),
+                ("write_date", ">=",datetime(self.date_from.year,self.date_from.month,self.date_from.day) + timedelta(hours=-8)),
+                ("write_date", "<", datetime(self.date_to.year,self.date_to.month,self.date_to.day) + timedelta(1) + timedelta(hours=-8)),
+            ],
+            order="id asc",
+        )
+
+        input_lines = self.input_line_ids.browse([])
+        for expense in expenses:
+            input_line = {
+                "name": expense.name,
+                "code": f'[{expense.product_id.name}] - {expense.id}',
+                "amount": expense.total_amount_company,
+            }
+            input_lines += input_lines.new(input_line)
+        self.input_line_ids = input_lines
 
     @api.onchange('contract_id')
     def onchange_contract(self):
