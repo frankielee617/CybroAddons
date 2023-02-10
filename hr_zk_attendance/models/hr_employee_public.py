@@ -4,7 +4,7 @@
 from odoo import fields, models
 
 
-class EmployeePublic(models.Model):
+class EmployeePublicV2(models.Model):
     _inherit = "hr.employee.public"
 
-    device_id = fields.Char(string="Biometric Device ID", readonly=True)
+    device_id = fields.Char(string="Biometric Device ID")
