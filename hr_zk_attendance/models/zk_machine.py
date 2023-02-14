@@ -170,17 +170,55 @@ class ZkMachine(models.Model):
                                                                   'address_id': info.address_id.id})
                                             att_var = att_obj.search([('employee_id', '=', get_user_id[0].id),
                                                                       ('check_out', '=', False)])
-                                            if each.punch == 0: #check-in
+                                            dynamicCondition = ("check_in","=",atten_time)
+
+                                            if each.punch == 1:
+                                                dynamicCondition = ("check_out","=",False)
+                                            att_var = att_obj.search(
+                                                [
+                                                    (
+                                                        "employee_id",
+                                                        "=",
+                                                        get_user_id[0].id,
+                                                    ),
+                                                    dynamicCondition,
+                                                ]
+                                            )
+
+                                            if each.punch == 0:  # check-in
                                                 if not att_var:
-                                                    att_obj.create({'employee_id': get_user_id[0].id,
-                                                                    'check_in': atten_time})
-                                            if each.punch == 1: #check-out
+                                                    att_obj.create(
+                                                        {
+                                                            "employee_id": get_user_id[
+                                                                0
+                                                            ].id,
+                                                            "check_in": atten_time,
+                                                        }
+                                                    )
+
+                                            if (
+                                                each.punch == 1
+                                                and att_var
+                                                and not att_var.check_out
+                                            ):  # check-out
                                                 if len(att_var) == 1:
-                                                    att_var.write({'check_out': atten_time})
+                                                    att_var.write(
+                                                        {"check_out": atten_time}
+                                                    )
                                                 else:
-                                                    att_var1 = att_obj.search([('employee_id', '=', get_user_id[0].id)])
+                                                    att_var1 = att_obj.search(
+                                                        [
+                                                            (
+                                                                "employee_id",
+                                                                "=",
+                                                                get_user_id[0].id,
+                                                            )
+                                                        ]
+                                                    )
                                                     if att_var1:
-                                                        att_var1[-1].write({'check_out': atten_time})
+                                                        att_var1[-1].write(
+                                                            {"check_out": atten_time}
+                                                        )
 
                                     else:
                                         employee = self.env['hr.employee'].create(
