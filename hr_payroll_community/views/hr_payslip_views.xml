@@ -135,7 +135,7 @@
             <form string="Payslip">
                 <header>
                     <button string="Confirm" name="action_payslip_done" type="object" states="draft" class="oe_highlight"/>
-                    <button string="Refund" name="refund_sheet" states="confirm,done" type='object' groups="hr_payroll_community.group_hr_payroll_community_user"/>
+                    <button string="Refund" name="refund_sheet" states="confirm,done" type='object'/>
                     <button string="Set to Draft" name="action_payslip_draft" type="object" states="cancel"/>
                     <button string="Compute Sheet" name="compute_sheet" type="object" states="draft" class="oe_highlight"/>
                     <button string="Cancel Payslip" name="action_payslip_cancel" type="object" states="draft,hr_check,confirm,verify"/>
@@ -300,7 +300,7 @@
         <field name="res_model">hr.payslip</field>
         <field name="view_mode">tree,kanban,form</field>
         <field name="search_view_id" ref="view_hr_payslip_filter"/>
-        <field name="domain">['&amp;',('employee_id.user_id','=',uid),('state','=','done')]</field>
+        <field name="domain">[('employee_id.user_id','=',uid)]</field>
     </record>
 
     <menuitem action="action_view_hr_payslip_form_kiosk" id="menu_department_tree_kiosk" sequence="1" parent="menu_hr_payroll_community_root" groups="hr_payroll_community.group_hr_payroll_community_kiosk"/>
