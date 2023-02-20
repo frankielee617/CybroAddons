@@ -15,6 +15,7 @@
         'hr_contract',
         'hr_holidays',
         'hr_contract_types',
+        'hr_expense'
     ],
     'data': [
         'security/hr_payroll_security.xml',
