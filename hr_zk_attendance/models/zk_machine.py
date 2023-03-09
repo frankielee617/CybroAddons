@@ -22,6 +22,7 @@
 import pytz
 import sys
 import datetime
+from datetime import timedelta
 import logging
 import binascii
 
@@ -31,6 +32,8 @@ from struct import unpack
 from odoo import api, fields, models
 from odoo import _
 from odoo.exceptions import UserError, ValidationError
+from itertools import groupby
+
 _logger = logging.getLogger(__name__)
 try:
     from zk import ZK, const
@@ -45,6 +48,12 @@ class HrAttendance(models.Model):
 
     device_id = fields.Char(string='Biometric Device ID')
 
+    @api.constrains("check_in", "check_out", "employee_id")
+    def _check_validity(self):
+        """Customization
+                To remove the constraint checking
+        """
+        # return False
 
 class ZkMachine(models.Model):
     _name = 'zk.machine'
@@ -132,14 +141,91 @@ class ZkMachine(models.Model):
             if conn:
                 # conn.disable_device() #Device Cannot be used during this time.
                 try:
-                    user = conn.get_users()
+                    device_users = conn.get_users()
                 except:
-                    user = False
+                    device_users = False
+
+                if not device_users:
+                    raise UserError(_('There is no user created yet. Please create at least one user.'))
+
+
                 try:
                     attendance = conn.get_attendance()
-                except:
+                    attendance.sort(
+                        key=lambda x:int(x.user_id),reverse=False
+                    )
+                    grouped_attendances = [list(group) for key,group in groupby(iterable=attendance,key=lambda x:x.user_id)]
+                except Exception as e:
                     attendance = False
-                if attendance:
+                    grouped_attendances = False
+                # return;
+                if grouped_attendances:
+                    non_existence_employees = []
+
+                    for i,per_user_attendances in enumerate(grouped_attendances):
+                        per_user_attendances.sort(key=lambda x:x.timestamp)
+                        for j,attendance in enumerate(per_user_attendances):
+                            employee = self.env['hr.employee'].search([
+                                ('device_id','=',attendance.user_id)
+                            ])
+                            if employee:        
+                                atten_time = attendance.timestamp
+                                atten_time = datetime.strptime(atten_time.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')
+                                local_tz = pytz.timezone(self.env.user.partner_id.tz or 'GMT')
+                                local_dt = local_tz.localize(atten_time, is_dst=None)
+                                utc_dt = local_dt.astimezone(pytz.utc)
+                                utc_dt = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+                                atten_time = datetime.strptime(utc_dt, "%Y-%m-%d %H:%M:%S")
+                                atten_time_str = fields.Datetime.to_string(atten_time)
+                                db_attendances = att_obj.search(domain=[
+                                     ("employee_id","=",employee[0].id),
+                                     '|',
+                                     ("check_in",'<=',atten_time_str),
+                                     ('check_out','=',False)
+                                ],order='id')
+
+                                # if no record found
+                                if not db_attendances:
+                                    att_obj.create(
+                                        {
+                                            "employee_id": employee[0].id,
+                                            "check_in": atten_time,
+                                        }
+                                    )
+                                else:
+
+
+                                    for k,record in enumerate(db_attendances):
+                                        check_in = record.check_in
+                                        check_out = record.check_out
+                                        if check_in == atten_time:
+                                            break
+                                        elif check_in < atten_time:
+                                            if check_out==False:
+                                                record.write({
+                                                    'check_out': atten_time
+                                                })
+                                            elif check_out:
+                                                """"""
+                                                difference = local_dt+timedelta(hours=15) - db_attendances[0].check_in.astimezone(local_tz)                                                # print(difference.hours)
+                                                print(difference.days)
+                                
+                            else:
+                                for device_user in device_users:
+                                    if device_user.user_id == attendance.user_id:
+                                        non_existence_employees.append(device_user) 
+                                break
+
+
+
+                    ### Raise Non Existence Employees Error
+                    if non_existence_employees:
+                        """
+                        If there is no biometric device id found in employees,
+                        raise an exception/warning instead of create the new employee
+                        """
+                        self.non_existence_employee_error(non_existence_employees)
+                    return 
                     for each in attendance:
                         atten_time = each.timestamp
                         atten_time = datetime.strptime(atten_time.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')
@@ -162,63 +248,67 @@ class ZkMachine(models.Model):
                                         if duplicate_atten_ids:
                                             continue
                                         else:
-                                            zk_attendance.create({'employee_id': get_user_id[0].id,
-                                                                  'device_id': each.user_id,
-                                                                  'attendance_type': str(each.status),
-                                                                  'punch_type': str(each.punch),
-                                                                  'punching_time': atten_time,
-                                                                  'address_id': info.address_id.id})
-                                            att_var = att_obj.search([('employee_id', '=', get_user_id[0].id),
-                                                                      ('check_out', '=', False)])
-                                            dynamicCondition = ("check_in","=",atten_time)
+                                            """
+                                            ntg
+                                            """
+                                            # print('gg')
+                                            # zk_attendance.create({'employee_id': get_user_id[0].id,
+                                            #                       'device_id': each.user_id,
+                                            #                       'attendance_type': str(each.status),
+                                            #                       'punch_type': str(each.punch),
+                                            #                       'punching_time': atten_time,
+                                            #                       'address_id': info.address_id.id})
+                                            # att_var = att_obj.search([('employee_id', '=', get_user_id[0].id),
+                                            #                           ('check_out', '=', False)])
+                                            # dynamicCondition = ("check_in","=",atten_time)
 
-                                            if each.punch == 1:
-                                                dynamicCondition = ("check_out","=",False)
-                                            att_var = att_obj.search(
-                                                [
-                                                    (
-                                                        "employee_id",
-                                                        "=",
-                                                        get_user_id[0].id,
-                                                    ),
-                                                    dynamicCondition,
-                                                ]
-                                            )
+                                            # if each.punch == 1:
+                                            #     dynamicCondition = ("check_out","=",False)
+                                            # att_var = att_obj.search(
+                                            #     [
+                                            #         (
+                                            #             "employee_id",
+                                            #             "=",
+                                            #             get_user_id[0].id,
+                                            #         ),
+                                            #         dynamicCondition,
+                                            #     ]
+                                            # )
 
-                                            if each.punch == 0:  # check-in
-                                                if not att_var:
-                                                    att_obj.create(
-                                                        {
-                                                            "employee_id": get_user_id[
-                                                                0
-                                                            ].id,
-                                                            "check_in": atten_time,
-                                                        }
-                                                    )
+                                            # if each.punch == 0:  # check-in
+                                            #     if not att_var:
+                                            #         att_obj.create(
+                                            #             {
+                                            #                 "employee_id": get_user_id[
+                                            #                     0
+                                            #                 ].id,
+                                            #                 "check_in": atten_time,
+                                            #             }
+                                            #         )
 
-                                            if (
-                                                each.punch == 1
-                                                and att_var
-                                                and not att_var.check_out
-                                            ):  # check-out
-                                                if len(att_var) == 1:
-                                                    att_var.write(
-                                                        {"check_out": atten_time}
-                                                    )
-                                                else:
-                                                    att_var1 = att_obj.search(
-                                                        [
-                                                            (
-                                                                "employee_id",
-                                                                "=",
-                                                                get_user_id[0].id,
-                                                            )
-                                                        ]
-                                                    )
-                                                    if att_var1:
-                                                        att_var1[-1].write(
-                                                            {"check_out": atten_time}
-                                                        )
+                                            # if (
+                                            #     each.punch == 1
+                                            #     and att_var
+                                            #     and not att_var.check_out
+                                            # ):  # check-out
+                                            #     if len(att_var) == 1:
+                                            #         att_var.write(
+                                            #             {"check_out": atten_time}
+                                            #         )
+                                            #     else:
+                                            #         att_var1 = att_obj.search(
+                                            #             [
+                                            #                 (
+                                            #                     "employee_id",
+                                            #                     "=",
+                                            #                     get_user_id[0].id,
+                                            #                 )
+                                            #             ]
+                                            #         )
+                                            #         if att_var1:
+                                            #             att_var1[-1].write(
+                                            #                 {"check_out": atten_time}
+                                            #             )
 
                                     else:
                                         employee = self.env['hr.employee'].create(
@@ -240,3 +330,12 @@ class ZkMachine(models.Model):
                     raise UserError(_('Unable to get the attendance log, please try again later.'))
             else:
                 raise UserError(_('Unable to connect, please check the parameters and network connections.'))
+
+    def non_existence_employee_error(self,non_existence_employees=[]):
+        logs=""
+        for index,device_user in enumerate(non_existence_employees):
+            logs+= "\r\n======\r\n{}. Name: {}\r\nBiometric Device ID: {}".format(index+1,device_user.name,device_user.user_id)
+        
+        raise UserError(
+                    _("The following user(s) is haven't linked or created{}\r\n======"
+                    .format(logs)))              
