@@ -101,7 +101,7 @@ class ZkMachine(models.Model):
                     clear_data = zk.get_attendance()
                     if clear_data:
                         self._cr.execute("""delete from zk_machine_attendance""")
-                        conn.clear_attendance()
+                        # conn.clear_attendance()
                         conn.disconnect()
                     else:
                         raise UserError(
