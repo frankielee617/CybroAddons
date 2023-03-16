@@ -278,11 +278,10 @@ class ZkMachine(models.Model):
                                             if local_dt.date() == check_in.astimezone(
                                                 local_tz
                                             ).date() or (
-                                                attendance.punch == 1
-                                                and (
+                                                (    
                                                     local_dt
                                                     - check_in.astimezone(local_tz)
-                                                ).hour
+                                                ) / timedelta(hours=1)
                                                 < 24
                                             ):
                                                 record.write({"check_out": atten_time})
